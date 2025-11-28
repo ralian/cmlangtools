@@ -1,8 +1,9 @@
 #include <cstdio>
+#include <exception>
 #include <fstream>
 #include <iostream>
-#include <string>
 #include <sstream>
+#include <string>
 #include <vector>
 
 #include "cmListFileLexer.h"
@@ -46,7 +47,6 @@ int main(int argc, char** argv)
     bool inCommand = false;
     bool haveNewline = true;
     int parenDepth = 0;
-    std::string error;
 
     while (cmListFileLexer_Token* token = cmListFileLexer_Scan(lexer)) {
         if (token->type == cmListFileLexer_Token_Space) {
@@ -75,8 +75,7 @@ int main(int argc, char** argv)
                 // Argument
                 currentArgs.push_back(std::string(token->text, token->length));
             } else {
-                error = "Parse error: Expected newline before identifier";
-                break;
+                throw std::runtime_error("Parse error: Expected newline before identifier");
             }
         } else if (token->type == cmListFileLexer_Token_ParenLeft) {
             if (inCommand) {
@@ -89,8 +88,7 @@ int main(int argc, char** argv)
                     currentArgs.push_back("(");
                 }
             } else {
-                error = "Parse error: Unexpected '('";
-                break;
+                throw std::runtime_error("Parse error: Unexpected '('");
             }
         } else if (token->type == cmListFileLexer_Token_ParenRight) {
             if (inCommand) {
@@ -108,33 +106,28 @@ int main(int argc, char** argv)
                     currentArgs.push_back(")");
                 }
             } else {
-                error = "Parse error: Unexpected ')'";
-                break;
+                throw std::runtime_error("Parse error: Unexpected ')'");
             }
         } else if (token->type == cmListFileLexer_Token_ArgumentUnquoted ||
                    token->type == cmListFileLexer_Token_ArgumentQuoted ||
                    token->type == cmListFileLexer_Token_ArgumentBracket) {
-            if (inCommand) {
+            if (inCommand)
                 currentArgs.push_back(std::string(token->text, token->length));
-            } else {
-                error = "Parse error: Argument outside of command";
-                break;
-            }
+            else
+                throw std::runtime_error("Parse error: Argument outside of command");
         } else if (token->type == cmListFileLexer_Token_BadCharacter ||
                    token->type == cmListFileLexer_Token_BadBracket ||
                    token->type == cmListFileLexer_Token_BadString) {
-            error = "Parse error: Bad token encountered";
-            break;
+            throw std::runtime_error("Parse error: Bad token encountered");
         }
     }
 
     // Handle any remaining command
     if (inCommand && !currentCommand.empty()) {
-        if (parenDepth == 0) {
+        if (parenDepth == 0)
             commands.push_back({currentCommand, currentArgs});
-        } else {
-            error = "Parse error: Unclosed parentheses";
-        }
+        else
+            throw std::runtime_error("Parse error: Unclosed parentheses");
     }
 
     cmListFileLexer_Delete(lexer);
