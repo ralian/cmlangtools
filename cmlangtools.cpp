@@ -5,9 +5,22 @@
 #include <sstream>
 #include <string>
 #include <vector>
+#include <cctype>
+#include <algorithm>
 
 #include "cmListFileLexer.h"
 #include "cmListFileCache.h"
+
+bool ichar_equals(char a, char b)
+{
+    return std::tolower(static_cast<unsigned char>(a)) ==
+           std::tolower(static_cast<unsigned char>(b));
+}
+
+bool iequals(const std::string& lhs, const std::string& rhs)
+{
+    return std::ranges::equal(lhs, rhs, ichar_equals);
+}
 
 using cm_command = std::pair<std::string, std::vector<std::string>>;
 
@@ -100,6 +113,45 @@ void handle_token(lexer_context& ctx, std::vector<cm_command>& commands)
     }
 }
 
+// A simple self test, just print all commands and their arguments.
+// todo: we should pass an output stream to this, so we can write to a file or different buffer instead of stdout.
+std::string cml0_print_all(const std::vector<cm_command>& commands)
+{
+    for (const auto& command : commands) {
+        std::cout << "Command: " << command.first << "\n";
+        for (const auto& arg : command.second) {
+            std::cout << "  Argument: " << arg << "\n";
+        }
+    }
+    return "PASS";
+}
+
+// CML1: Report a failure if we find a command which could use access specifiers, but does not.
+// todo: some of these have mandatory specifiers and can be skipped.
+// todo: we need to pass more token location info in from the lexer and report every failure, not just any failure.
+std::string cml1_access_specifiers(const std::vector<cm_command>& commands)
+{
+    for (const auto& command : commands) {
+        if (iequals(command.first, "target_compile_definitions")
+            || iequals(command.first, "target_compile_options")
+            || iequals(command.first, "target_include_directories")
+            || iequals(command.first, "target_link_directories")
+            || iequals(command.first, "target_link_options")
+            || iequals(command.first, "target_link_libraries")
+            || iequals(command.first, "target_precompile_headers")
+            || iequals(command.first, "target_sources")
+        ) {
+            bool found_specifier = false;
+            for (const auto& arg : command.second) {
+                if (iequals(arg, "PRIVATE") || iequals(arg, "INTERFACE") || iequals(arg, "PUBLIC"))
+                    found_specifier = true;
+            }
+            if (!found_specifier) return "FAIL";
+        }
+    }
+    return "PASS";
+}
+
 int main(int argc, char** argv)
 {
     if (argc < 2) {
@@ -151,12 +203,8 @@ int main(int argc, char** argv)
     }
     cmListFileLexer_Delete(ctx.lexer);
 
-    for (const auto& command : commands) {
-        std::cout << "Command: " << command.first << "\n";
-        for (const auto& arg : command.second) {
-            std::cout << "  Argument: " << arg << "\n";
-        }
-    }
+    std::cout << "cml0_print_all         => " << cml0_print_all(commands) << "\n";
+    std::cout << "cml1_access_specifiers => " << cml1_access_specifiers(commands) << "\n";
 
     return 0;
 }
